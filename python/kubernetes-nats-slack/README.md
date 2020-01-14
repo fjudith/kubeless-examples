@@ -163,3 +163,11 @@ kubectl -n kubeless logs -l function=slack
 * <https://www.alibabacloud.com/blog/kubeless-a-deep-dive-into-serverless-kubernetes-frameworks-1_594901>
 * <https://github.com/nats-io/asyncio-nats-examples>
 * <https://slack.dev/python-slackclient/auth.html>
+
+## Test environment
+
+Scripts are validated on the using the following environment.
+
+* [Kubernetes](https://github.com/kubernetes/kubernetes): `v1.16.3`
+* [Nats operator](https://github.com/nats-io/nats-operator): `v0.6.0`
+* [Nats cluster](https://github.com/nats-io/nats-server): `v2.1.2`
