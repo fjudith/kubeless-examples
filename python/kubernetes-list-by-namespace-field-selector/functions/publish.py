@@ -50,8 +50,7 @@ config.load_incluster_config()
 #         logger.critical("Error creating Kubernetes configuration: %s", e)
 #         exit(2)
 
-
-async def run(event, context):
+async def run(loop):
 
     # Client to list namespaces
     CoreV1Api = client.CoreV1Api()
@@ -63,7 +62,7 @@ async def run(event, context):
     nc = NATS()
     
     try:
-        await nc.connect(args.nats_address, connect_timeout=args.conn_timeout, max_reconnect_attempts=args.conn_attempts, reconnect_time_wait=args.conn_wait)
+        await nc.connect(args.nats_address, loop=loop, connect_timeout=args.conn_timeout, max_reconnect_attempts=args.conn_attempts, reconnect_time_wait=args.conn_wait)
     except ErrNoServers as e:
         # Could not connect to any server in the cluster.
         print(e)
@@ -123,3 +122,16 @@ async def run(event, context):
         get_statefulsets()
     )
     await nc.drain()
+
+
+
+def k8s(event, context):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(run(loop))
+    except KeyboardInterrupt:
+        logger.info('keyboard shutdown')
+    finally:
+        logger.info('closing event loop')
+        loop.close()
