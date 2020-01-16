@@ -36,6 +36,23 @@ python3 list-replicabynamespacelabelselector.py
 2020-01-15 15:00:31,067 - script - INFO - Namespace: demo StatefulSet: web Replica: 3
 ```
 
+## Publish to NATS periodically
+
+Kubeless `cronjob` function is leveraged to publish amount of replica of Deployment and Statefulset resources on a scheduled basis.
+
+Execute the following command to create a `function` that publish the amount of replica of Namespaces labeled `nightly-shutdown=true`.
+
+```bash
+kubeless function deploy pubk8sreplica --namespace kubeless --runtime python3.6 --handler publish.run --from-file functions/publish.py --dependencies functions/requirements.txt --env NATS_ADDRESS=nats://nats-cluster.nats-io:4222
+```
+
+Execute the following command to create a `trigger` that run the `function` every 5 minutes.
+
+```bash
+kubeless trigger cronjob create pubk8sreplica --namespace kubeless --function pubk8sreplica --schedule '*/5 * * * *'
+```
+
+
 ## Test environment
 
 Scripts are validated on the using the following environment.
@@ -47,5 +64,7 @@ Scripts are validated on the using the following environment.
 
 ## References
 
-* <https://github.com/kubernetes-client/python/blob/master/kubernetes/docs/CoreV1Api.md#list_namespace>
-* <https://github.com/kubernetes-client/python/blob/master/kubernetes/docs/AppsV1Api.md#list_namespaced_deployment>
+* **Kubernetes CoreV1Api** : <https://github.com/kubernetes-client/python/blob/master/kubernetes/docs/CoreV1Api.md#list_namespace>
+* **Kubernetes AppsV1Api** : <https://github.com/kubernetes-client/python/blob/master/kubernetes/docs/AppsV1Api.md#list_namespaced_deployment>
+* **Crontab Generator**: <https://crontab-generator.org>
+* **Python running task concurently**: <https://docs.python.org/3/library/asyncio-task.html#running-tasks-concurrently>

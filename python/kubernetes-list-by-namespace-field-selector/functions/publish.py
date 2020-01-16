@@ -12,7 +12,7 @@ from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--in-cluster', help="use in cluster kubernetes config", action="store_true")
+# parser.add_argument('--in-cluster', help="use in cluster kubernetes config", action="store_true")
 parser.add_argument('-l', '--selector', help="Selector (label query) to filter on, supports '=', '==', and '!='.(e.g. -l key1=value1,key2=value2)", default='nightly-shutdown=true')
 parser.add_argument('-a', '--nats-address', help="address of nats cluster", default=os.environ.get('NATS_ADDRESS', None))
 parser.add_argument('-d', '--debug', help="enable debug logging", action="store_true")
@@ -40,17 +40,18 @@ if not args.nats_address:
 else:
     logger.debug("Using nats address: %s", args.nats_address)
 
-if args.in_cluster:
-    config.load_incluster_config()
-else:
-    try:
-        config.load_kube_config()
-    except Exception as e:
-        logger.critical("Error creating Kubernetes configuration: %s", e)
-        exit(2)
+config.load_incluster_config()
+# if args.in_cluster:
+#     config.load_incluster_config()
+# else:
+#     try:
+#         config.load_kube_config()
+#     except Exception as e:
+#         logger.critical("Error creating Kubernetes configuration: %s", e)
+#         exit(2)
 
 
-async def run(loop):
+async def run(event, context):
 
     # Client to list namespaces
     CoreV1Api = client.CoreV1Api()
@@ -62,7 +63,7 @@ async def run(loop):
     nc = NATS()
     
     try:
-        await nc.connect(args.nats_address, loop=loop, connect_timeout=args.conn_timeout, max_reconnect_attempts=args.conn_attempts, reconnect_time_wait=args.conn_wait)
+        await nc.connect(args.nats_address, connect_timeout=args.conn_timeout, max_reconnect_attempts=args.conn_attempts, reconnect_time_wait=args.conn_wait)
     except ErrNoServers as e:
         # Could not connect to any server in the cluster.
         print(e)
@@ -87,15 +88,16 @@ async def run(loop):
                 if args.enable_output:
                     print(json.dumps(msg))
                 
-                try:
-                    await nc.publish("k8s_replicas", json.dumps(msg).encode('utf-8'))
-                    await nc.flush(0.500)
-                except ErrConnectionClosed as e:
-                    print("Connection closed prematurely.")
-                    break
-                except ErrTimeout as e:
-                    print("Timeout occured when publishing msg i={}: {}".format(
-                        deploy, e))
+                if deploy.spec.replicas > 0:
+                    try:
+                        await nc.publish("k8s_replicas", json.dumps(msg).encode('utf-8'))
+                        await nc.flush(0.500)
+                    except ErrConnectionClosed as e:
+                        print("Connection closed prematurely.")
+                        break
+                    except ErrTimeout as e:
+                        print("Timeout occured when publishing msg i={}: {}".format(
+                            deploy, e))
     
     async def get_statefulsets():
         for ns in CoreV1Api.list_namespace(label_selector=args.selector).items:
@@ -105,31 +107,19 @@ async def run(loop):
                 if args.enable_output:
                     print(json.dumps(msg))
                 
-                try:
-                    await nc.publish("k8s_replicas", json.dumps(msg).encode('utf-8'))
-                    await nc.flush(0.500)
-                except ErrConnectionClosed as e:
-                    print("Connection closed prematurely.")
-                    break
-                except ErrTimeout as e:
-                    print("Timeout occured when publishing msg i={}: {}".format(
-                        sts, e))
+                if sts.spec.replicas > 0:
+                    try:
+                        await nc.publish("k8s_replicas", json.dumps(msg).encode('utf-8'))
+                        await nc.flush(0.500)
+                    except ErrConnectionClosed as e:
+                        print("Connection closed prematurely.")
+                        break
+                    except ErrTimeout as e:
+                        print("Timeout occured when publishing msg i={}: {}".format(
+                            sts, e))
     
     await asyncio.gather(
         get_deployments(),
         get_statefulsets()
     )
     await nc.drain()
-
-
-
-
-if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(run(loop))
-    except KeyboardInterrupt:
-        logger.info('keyboard shutdown')
-    finally:
-        logger.info('closing event loop')
-        loop.close()
