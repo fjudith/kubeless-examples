@@ -49,14 +49,7 @@ AppsV1Api = client.AppsV1Api()
 
 try:
     w = watch.Watch()
-    # api_response = CoreV1Api.list_namespace(label_selector=args.selector)
-    # pprint(api_response)
-
-    # for item in w.stream(CoreV1Api.list_namespace, label_selector=args.selector):
-    #     logger.info("Namespace: %s" % (item['object'].metadata.name))
-    #     pprint(item['object'].metadata.name)
-
-    # api_response = CoreV1Api.list_namespace(label_selector=args.selector)
+    
     for ns in CoreV1Api.list_namespace(label_selector=args.selector).items:
         logger.info("Namespace: %s Labels: %s" % (ns.metadata.name, ns.metadata.labels))
         for deploy in AppsV1Api.list_namespaced_deployment(ns.metadata.name).items:
