@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 import asyncio
 import argparse
 import json
@@ -17,8 +18,8 @@ parser.add_argument('-a', '--nats-address', help="address of nats cluster", defa
 parser.add_argument('-d', '--debug', help="enable debug logging", action="store_true")
 parser.add_argument('--output-deployments', help="output all deployments to stdout", action="store_true", dest='enable_output')
 parser.add_argument('--connect-timeout', help="NATS connect timeout (s)", type=int, default=10, dest='conn_timeout')
-parser.add_argument('--max-reconnect-attempts', help="number of times to attempt reconnect", type=int, default=1, dest='conn_attempts')
-parser.add_argument('--reconnect-time-wait', help="how long to wait between reconnect attempts", type=int, default=10, dest='conn_wait')
+parser.add_argument('--max-reconnect-attempts', help="number of times to attempt reconnect", type=int, default=5, dest='conn_attempts')
+parser.add_argument('--reconnect-time-wait', help="how long to wait between reconnect attempts", type=int, default=1, dest='conn_wait')
 args = parser.parse_args()
 
 logger = logging.getLogger('script')
@@ -48,70 +49,89 @@ else:
         logger.critical("Error creating Kubernetes configuration: %s", e)
         exit(2)
 
-# Client to list namespaces
-CoreV1Api = client.CoreV1Api()
-
-# Client to list Deployments and StatefulSets
-AppsV1Api = client.AppsV1Api()
-
 
 async def run(loop):
+
+    # Client to list namespaces
+    CoreV1Api = client.CoreV1Api()
+
+    # Client to list Deployments and StatefulSets
+    AppsV1Api = client.AppsV1Api()
+
+    # client publish to NATS
     nc = NATS()
+    
     try:
         await nc.connect(args.nats_address, loop=loop, connect_timeout=args.conn_timeout, max_reconnect_attempts=args.conn_attempts, reconnect_time_wait=args.conn_wait)
-    except Exception as e:
-        exit(e)
+    except ErrNoServers as e:
+        # Could not connect to any server in the cluster.
+        print(e)
+        return
 
-    async def get_resources():
-        w = watch.Watch()
-        for ns in w.stream(CoreV1Api.list_namespace, label_selector=args.selector):
-            logger.info("Namespace: %s Labels: %s" % (ns['object'].metadata.name, ns['object'].metadata.labels))
-            msg = {'type':ns['type'],'object':ns['raw_object']}
-            if args.enable_output:
-                print(json.dumps(msg))
+    async def message_handler(msg):
+        subject = msg.subject
+        reply = msg.reply
+        data = msg.data.decode()
+        print ("Received a message on '{subject} {reply}': {data}".format(
+            subject=subject, reply=reply, data=data
+        ))
             
-            for deploy in w.stream(AppsV1Api.list_namespaced_deployment, ns['object'].metadata.name):
-                logger.info("Namespace: %s Deployment: %s Replica: %s" % (deploy['object'].metadata.namespace, deploy['object'].metadata.name, deploy['object'].spec.replicas))
-                msg = {'type':deploy['type'],'object':deploy['raw_object']}
+    # Simple publisher and async subscriber via coroutine.
+    sid = await nc.subscribe("k8s_replicas", cb=message_handler)
+
+    async def get_deployments():
+        for ns in CoreV1Api.list_namespace(label_selector=args.selector).items:
+            for deploy in AppsV1Api.list_namespaced_deployment(ns.metadata.name).items:
+                logger.info("Namespace: %s Deployment: %s Replica: %s" % (deploy.metadata.namespace, deploy.metadata.name, deploy.spec.replicas))
+                msg = {'namespace': deploy.metadata.namespace, 'name': deploy.metadata.name, 'kind': 'deployment', 'replicas': deploy.spec.replicas}
                 if args.enable_output:
                     print(json.dumps(msg))
                 
-                await nc.publish("k8s_deployment_replicas", json.dumps(msg).encode('utf-8'))
-                await asyncio.sleep(0.1)
-
-                for sts in w.stream(AppsV1Api.list_namespaced_stateful_set, ns['object'].metadata.name):
-                    logger.info("Namespace: %s StatefulSet: %s Replica: %s" % (sts['object'].metadata.namespace, sts['object'].metadata.name, sts['object'].spec.replicas))
-                    msg = {'type':sts['type'],'object':sts['raw_object']}
-                    if args.enable_output:
-                        print(json.dumps(msg))
-                    
-                    await nc.publish("k8s_statefulset_replicas", json.dumps(msg).encode('utf-8'))
-                    await asyncio.sleep(0.1)
-
-    await get_resources()
-    await nc.close()
+                if deploy.spec.replicas > 0:
+                    try:
+                        await nc.publish("k8s_replicas", json.dumps(msg).encode('utf-8'))
+                        await nc.flush(0.500)
+                    except ErrConnectionClosed as e:
+                        print("Connection closed prematurely.")
+                        break
+                    except ErrTimeout as e:
+                        print("Timeout occured when publishing msg i={}: {}".format(
+                            deploy, e))
+    
+    async def get_statefulsets():
+        for ns in CoreV1Api.list_namespace(label_selector=args.selector).items:
+            for sts in AppsV1Api.list_namespaced_stateful_set(ns.metadata.name).items:
+                logger.info("Namespace: %s StatefulSet: %s Replica: %s" % (sts.metadata.namespace, sts.metadata.name, sts.spec.replicas))
+                msg = msg = {'namespace': sts.metadata.namespace, 'name': sts.metadata.name, 'kind': 'statefulset', 'replicas': sts.spec.replicas}
+                if args.enable_output:
+                    print(json.dumps(msg))
+                
+                if sts.spec.replicas > 0:
+                    try:
+                        await nc.publish("k8s_replicas", json.dumps(msg).encode('utf-8'))
+                        await nc.flush(0.500)
+                    except ErrConnectionClosed as e:
+                        print("Connection closed prematurely.")
+                        break
+                    except ErrTimeout as e:
+                        print("Timeout occured when publishing msg i={}: {}".format(
+                            sts, e))
+    
+    await asyncio.gather(
+        get_deployments(),
+        get_statefulsets()
+    )
+    await nc.drain()
 
 
 
 
 if __name__ == '__main__':
-
     loop = asyncio.get_event_loop()
-    loop.create_task(run(loop))
     try:
-        loop.run_forever()
-        logger.info("Namespace: %s Deployment: %s Replica: %s" % (deploy['object'].metadata.namespace, deploy['object'].metadata.name, deploy['object'].spec.replicas))
-        logger.info("Namespace: %s StatefulSet: %s Replica: %s" % (sts['object'].metadata.namespace, sts['object'].metadata.name, sts['object'].spec.replicas))
+        loop.run_until_complete(run(loop))
     except KeyboardInterrupt:
         logger.info('keyboard shutdown')
-        tasks = asyncio.gather(*asyncio.Task.all_tasks(loop=loop), loop=loop, return_exceptions=True)
-        tasks.add_done_callback(lambda t: loop.stop())
-        tasks.cancel()
-
-        # Keep the event loop running until it is either destroyed or all
-        # tasks have really terminated
-        while not tasks.done() and not loop.is_closed():
-            loop.run_forever()
     finally:
         logger.info('closing event loop')
         loop.close()
