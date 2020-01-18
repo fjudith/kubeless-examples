@@ -53,7 +53,7 @@ rules:
       - apps
     resources:
       - deployments/scale
-      - statefulset/scale
+      - statefulsets/scale
     verbs:
       - patch
       - update

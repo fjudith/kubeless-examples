@@ -13,13 +13,15 @@ from kubernetes.client.rest import ApiException
 parser = argparse.ArgumentParser()
 # Kubernetes related arguments
 parser.add_argument('--pretty', help='Output pretty printed.', default=False)
-parser.add_argument('--dry-run', help='Indicates that modifications should not be persisted. Valid values are: - All: all dry run stages will be processed (optional)', default='All')
+# parser.add_argument('--dry-run', help='Indicates that modifications should not be persisted. Valid values are: - All: all dry run stages will be processed (optional)')
+
 # NATS releated arguments
 parser.add_argument('-a', '--nats-address', help="address of nats cluster", default=os.environ.get('NATS_ADDRESS', None))
 parser.add_argument('--connect-timeout', help="NATS connect timeout (s)", type=int, default=10, dest='conn_timeout')
 parser.add_argument('--max-reconnect-attempts', help="number of times to attempt reconnect", type=int, default=5, dest='conn_attempts')
 parser.add_argument('--reconnect-time-wait', help="how long to wait between reconnect attempts", type=int, default=1, dest='conn_wait')
 
+# Logger arguments
 parser.add_argument('-d', '--debug', help="enable debug logging", action="store_true")
 parser.add_argument('--output-deployments', help="output all deployments to stdout", action="store_true", dest='enable_output')
 args = parser.parse_args()
@@ -49,7 +51,8 @@ def reduce_replica(event, context):
     if event['data']['kind'] == "deployment":
         body={'spec':{'replicas': 0}}
         try:
-            api_response = AppsV1Api.patch_namespaced_deployment_scale(name=event['data']['name'], namespace=event['data']['namespace'], body=body, dry_run=args.dry_run, pretty=args.pretty)
+            # api_response = AppsV1Api.patch_namespaced_deployment_scale(name=event['data']['name'], namespace=event['data']['namespace'], body=body, dry_run=args.dry_run, pretty=args.pretty)
+            api_response = AppsV1Api.patch_namespaced_deployment_scale(name=event['data']['name'], namespace=event['data']['namespace'], body=body, pretty=args.pretty)
             pprint(api_response)
         except ApiException as e:
             print("Exception when calling AppsV1Api->patch_namespaced_deployment_scale: %s\n" % e)
@@ -60,7 +63,8 @@ def reduce_replica(event, context):
     elif event['data']['kind'] == "statefulset":
         body={'spec':{'replicas': 1}}
         try:
-            api_response = AppsV1Api.patch_namespaced_stateful_set_scale(name=event['data']['name'], namespace=event['data']['namespace'], body=body, dry_run=args.dry_run, pretty=args.pretty)
+            # api_response = AppsV1Api.patch_namespaced_stateful_set_scale(name=event['data']['name'], namespace=event['data']['namespace'], body=body, dry_run=args.dry_run, pretty=args.pretty)
+            api_response = AppsV1Api.patch_namespaced_stateful_set_scale(name=event['data']['name'], namespace=event['data']['namespace'], body=body, pretty=args.pretty)
             pprint(api_response)
         except ApiException as e:
             print("Exception when calling AppsV1Api->patch_namespaced_stateful_set_scale: %s\n" % e)
