@@ -40,7 +40,7 @@ logger.addHandler(ch)
 
 config.load_incluster_config()
 
-def reduce_replica(event, context):
+def run(event, context):
 
     # Client to list namespaces
     CoreV1Api = client.CoreV1Api()

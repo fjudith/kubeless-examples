@@ -50,7 +50,7 @@ config.load_incluster_config()
 #         logger.critical("Error creating Kubernetes configuration: %s", e)
 #         exit(2)
 
-async def run(loop):
+async def publish(loop):
 
     # Client to list namespaces
     CoreV1Api = client.CoreV1Api()
@@ -125,11 +125,11 @@ async def run(loop):
 
 
 
-def k8s(event, context):
+def run(event, context):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(run(loop))
+        loop.run_until_complete(publish(loop))
     except KeyboardInterrupt:
         logger.info('keyboard shutdown')
     finally:
