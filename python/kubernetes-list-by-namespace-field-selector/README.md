@@ -4,6 +4,8 @@
 List all deployments and statefulsets replicas of namespaces containing the label `nightly-shutdown=true`.
 Return a message containing number replica of both resources.
 
+![architecture](./architecture_fra.png)
+
 ## List replicas
 
 Expose the NATS cluster locally.
@@ -47,15 +49,15 @@ Execute the following command to create a `function` that publish the amount of 
 > It is then required to patch the generated resource. 
 
 ```bash
-kubeless function deploy list-replicas --namespace kubeless --runtime python3.6 --handler publish-replicastonats.run --from-file functions/publish-replicastonats.py --dependencies functions/requirements.txt --env NATS_ADDRESS='nats://nats-cluster.nats-io:4222' && \
+kubeless function deploy publish-resources --namespace kubeless --runtime python3.6 --handler publish-resources.run --from-file functions/publish-resources.py --dependencies functions/publish-requirements.txt --env NATS_ADDRESS='nats://nats-cluster.nats-io:4222' && \
 kubectl apply -n kubeless -f manifests/kubeless-replica-view-rbac.yaml && \
-kubectl -n kubeless patch deployment list-replicas -p '{"spec":{"template":{"spec":{"serviceAccountName":"kubeless-replica-view"}}}}'
+kubectl -n kubeless patch deployment publish-resources -p '{"spec":{"template":{"spec":{"serviceAccountName":"kubeless-replica-view"}}}}'
 ```
 
 Execute the following command to create a `trigger` that run the `function` every 5 minutes.
 
 ```bash
-kubeless trigger cronjob create pubk8sreplica --namespace kubeless --function list-replicas --schedule '*/5 * * * *'
+kubeless trigger cronjob create pubk8sreplica --namespace kubeless --function publish-resources --schedule '*/5 * * * *'
 ```
 
 ## Scale down the number of replica on NAT publish event
@@ -63,15 +65,37 @@ kubeless trigger cronjob create pubk8sreplica --namespace kubeless --function li
 Execute the following command to deploy the function that captures publish events to the Nats queue in order to reduce the number of replicas.
 
 ```bash
-kubeless function deploy downscale-replicas --namespace kubeless --runtime python3.6 --handler downscale-replicas.run --from-file functions/downscale-replicas.py --dependencies functions/requirements.txt && \
+kubeless function deploy downscale-resources --namespace kubeless --runtime python3.6 --handler downscale-resources.run --from-file functions/downscale-resources.py --dependencies functions/downscale-requirements.txt && \
 kubectl apply -n kubeless -f manifests/kubeless-replica-manage-rbac.yaml && \
-kubectl -n kubeless patch deployment downscale-replicas -p '{"spec":{"template":{"spec":{"serviceAccountName":"kubeless-replica-manage"}}}}'
+kubectl -n kubeless patch deployment downscale-resources -p '{"spec":{"template":{"spec":{"serviceAccountName":"kubeless-replica-manage"}}}}'
 ```
 
 Execute the following command to create a `trigger` that run the `function` on NATS events.
 
 ```bash
-kubeless trigger nats create downscale-replicas  --namespace kubeless --function-selector created-by=kubeless,function=downscale-replicas --trigger-topic k8s_replicas
+kubeless trigger nats create downscale-resources  --namespace kubeless --function-selector created-by=kubeless,function=downscale-resources --trigger-topic k8s_replicas
+```
+
+
+## Patch Ingress based on Deployment/Statefulset selectors
+
+To indentify the Ingress resource to patch, Template labels pushed for each Deployment and Statefulset are used to identify the associated service.
+Then service name is used to identify which Ingress has the Service name as backend.
+
+If an Ingress resource matches the criteria, a patch modifying the backend `serviceName` and `servicePort` is applied to it.
+
+Execute the following command to deploy the function to patch the eligible Ingress resources.
+
+```bash
+kubeless function deploy update-ingress --namespace kubeless --runtime python3.6 --handler update-ingress.patch --from-file functions/update-ingress.py --dependencies functions/publish-requirements.txt --env NATS_ADDRESS='nats://nats-cluster.nats-io:4222' && \
+kubectl apply -n kubeless -f manifests/kubeless-ingress-manage-rbac.yaml && \
+kubectl -n kubeless patch deployment update-ingress -p '{"spec":{"template":{"spec":{"serviceAccountName":"kubeless-ingress-manage"}}}}'
+```
+
+Execute the following command to create a `trigger` that run the `function` on NATS events.
+
+```bash
+kubeless trigger nats create update-ingress  --namespace kubeless --function-selector created-by=kubeless,function=update-ingress --trigger-topic k8s_replicas
 ```
 
 ## Test environment

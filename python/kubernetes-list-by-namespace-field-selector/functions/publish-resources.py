@@ -12,7 +12,7 @@ from nats.aio.client import Client as NATS
 from nats.aio.errors import ErrConnectionClosed, ErrTimeout, ErrNoServers
 
 parser = argparse.ArgumentParser()
-# parser.add_argument('--in-cluster', help="use in cluster kubernetes config", action="store_true")
+parser.add_argument('--in-cluster', help="use in cluster kubernetes config", action="store_true", default=True) #Remove ", default=True" if running locally
 parser.add_argument('-l', '--selector', help="Selector (label query) to filter on, supports '=', '==', and '!='.(e.g. -l key1=value1,key2=value2)", default='nightly-shutdown=true')
 parser.add_argument('-a', '--nats-address', help="address of nats cluster", default=os.environ.get('NATS_ADDRESS', None))
 parser.add_argument('-d', '--debug', help="enable debug logging", action="store_true")
@@ -40,15 +40,14 @@ if not args.nats_address:
 else:
     logger.debug("Using nats address: %s", args.nats_address)
 
-config.load_incluster_config()
-# if args.in_cluster:
-#     config.load_incluster_config()
-# else:
-#     try:
-#         config.load_kube_config()
-#     except Exception as e:
-#         logger.critical("Error creating Kubernetes configuration: %s", e)
-#         exit(2)
+if args.in_cluster:
+    config.load_incluster_config()
+else:
+    try:
+        config.load_kube_config()
+    except Exception as e:
+        logger.critical("Error creating Kubernetes configuration: %s", e)
+        exit(2)
 
 async def publish(loop):
 
@@ -83,7 +82,7 @@ async def publish(loop):
         for ns in CoreV1Api.list_namespace(label_selector=args.selector).items:
             for deploy in AppsV1Api.list_namespaced_deployment(ns.metadata.name).items:
                 logger.info("Namespace: %s Deployment: %s Replica: %s" % (deploy.metadata.namespace, deploy.metadata.name, deploy.spec.replicas))
-                msg = {'namespace': deploy.metadata.namespace, 'name': deploy.metadata.name, 'kind': 'deployment', 'replicas': deploy.spec.replicas}
+                msg = {'namespace': deploy.metadata.namespace, 'name': deploy.metadata.name, 'kind': 'deployment', 'replicas': deploy.spec.replicas, 'labels': deploy.spec.metadata.labels}
                 if args.enable_output:
                     print(json.dumps(msg))
                 
@@ -102,7 +101,7 @@ async def publish(loop):
         for ns in CoreV1Api.list_namespace(label_selector=args.selector).items:
             for sts in AppsV1Api.list_namespaced_stateful_set(ns.metadata.name).items:
                 logger.info("Namespace: %s StatefulSet: %s Replica: %s" % (sts.metadata.namespace, sts.metadata.name, sts.spec.replicas))
-                msg = msg = {'namespace': sts.metadata.namespace, 'name': sts.metadata.name, 'kind': 'statefulset', 'replicas': sts.spec.replicas}
+                msg = msg = {'namespace': sts.metadata.namespace, 'name': sts.metadata.name, 'kind': 'statefulset', 'replicas': sts.spec.replicas, 'labels': sts.spec.template.metadata.labels}
                 if args.enable_output:
                     print(json.dumps(msg))
                 

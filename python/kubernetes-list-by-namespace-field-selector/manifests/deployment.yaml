@@ -5,6 +5,7 @@ metadata:
   namespace: demo
   labels:
     app: nginx
+    type: deployment
 spec:
   ports:
   - port: 80
@@ -38,3 +39,30 @@ spec:
         ports:
         - containerPort: 80
           name: web
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    certmanager.k8s.io/cluster-issuer: letsencrypt-prod
+    kubernetes.io/ingress.class: nginx
+    kubernetes.io/tls-acme: "true"
+  name: nginx-deploy
+  namespace: demo
+spec:
+  rules:
+  - host: demo-deploy.example.com
+    http:
+      paths:
+      - backend:
+          serviceName: nginx-deploy
+          servicePort: 80
+        path: /deployment
+      - backend:
+          serviceName: nginx-sts
+          servicePort: 80
+        path: /statefulset
+  tls:
+  - hosts:
+    - demo-deploy.example.com
+    secretName: ningx-deploy-prod-cert
