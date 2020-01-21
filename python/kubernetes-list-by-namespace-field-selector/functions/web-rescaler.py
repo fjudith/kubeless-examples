@@ -17,7 +17,7 @@ from bottle import route, run, template, request
 
 parser = argparse.ArgumentParser()
 # Kubernetes related arguments
-parser.add_argument('--in-cluster', help="use in cluster kubernetes config", action="store_true") #Remove ", default=True" if running locally
+parser.add_argument('--in-cluster', help="use in cluster kubernetes config", action="store_true", default=True) #Remove ", default=True" if running locally
 parser.add_argument('--pretty', help='Output pretty printed.', default=False)
 # parser.add_argument('--dry-run', help='Indicates that modifications should not be persisted. Valid values are: - All: all dry run stages will be processed (optional)')
 parser.add_argument('--temp-webserver', help='Pod service the replica restore page', default='reactivate')
