@@ -12,6 +12,7 @@ from kubernetes.client.rest import ApiException
 
 parser = argparse.ArgumentParser()
 # Kubernetes related arguments
+parser.add_argument('--in-cluster', help="use in cluster kubernetes config", action="store_true", default=True) #Remove ", default=True" if running locally
 parser.add_argument('--pretty', help='Output pretty printed.', default=False)
 # parser.add_argument('--dry-run', help='Indicates that modifications should not be persisted. Valid values are: - All: all dry run stages will be processed (optional)')
 
@@ -38,7 +39,14 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-config.load_incluster_config()
+if args.in_cluster:
+    config.load_incluster_config()
+else:
+    try:
+        config.load_kube_config()
+    except Exception as e:
+        logger.critical("Error creating Kubernetes configuration: %s", e)
+        exit(2)
 
 def run(event, context):
 
@@ -51,7 +59,6 @@ def run(event, context):
     if event['data']['kind'] == "deployment":
         body={'spec':{'replicas': 0}}
         try:
-            # api_response = AppsV1Api.patch_namespaced_deployment_scale(name=event['data']['name'], namespace=event['data']['namespace'], body=body, dry_run=args.dry_run, pretty=args.pretty)
             api_response = AppsV1Api.patch_namespaced_deployment_scale(name=event['data']['name'], namespace=event['data']['namespace'], body=body, pretty=args.pretty)
             pprint(api_response)
         except ApiException as e:
@@ -63,7 +70,6 @@ def run(event, context):
     elif event['data']['kind'] == "statefulset":
         body={'spec':{'replicas': 1}}
         try:
-            # api_response = AppsV1Api.patch_namespaced_stateful_set_scale(name=event['data']['name'], namespace=event['data']['namespace'], body=body, dry_run=args.dry_run, pretty=args.pretty)
             api_response = AppsV1Api.patch_namespaced_stateful_set_scale(name=event['data']['name'], namespace=event['data']['namespace'], body=body, pretty=args.pretty)
             pprint(api_response)
         except ApiException as e:
