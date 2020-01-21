@@ -82,7 +82,7 @@ async def publish(loop):
         for ns in CoreV1Api.list_namespace(label_selector=args.selector).items:
             for deploy in AppsV1Api.list_namespaced_deployment(ns.metadata.name).items:
                 logger.info("Namespace: %s Deployment: %s Replica: %s" % (deploy.metadata.namespace, deploy.metadata.name, deploy.spec.replicas))
-                msg = {'namespace': deploy.metadata.namespace, 'name': deploy.metadata.name, 'kind': 'deployment', 'replicas': deploy.spec.replicas, 'labels': deploy.spec.metadata.labels}
+                msg = {'namespace': deploy.metadata.namespace, 'name': deploy.metadata.name, 'kind': 'deployment', 'replicas': deploy.spec.replicas, 'labels': deploy.spec.template.metadata.labels}
                 if args.enable_output:
                     print(json.dumps(msg))
                 
@@ -101,7 +101,7 @@ async def publish(loop):
         for ns in CoreV1Api.list_namespace(label_selector=args.selector).items:
             for sts in AppsV1Api.list_namespaced_stateful_set(ns.metadata.name).items:
                 logger.info("Namespace: %s StatefulSet: %s Replica: %s" % (sts.metadata.namespace, sts.metadata.name, sts.spec.replicas))
-                msg = msg = {'namespace': sts.metadata.namespace, 'name': sts.metadata.name, 'kind': 'statefulset', 'replicas': sts.spec.replicas, 'labels': sts.spec.template.metadata.labels}
+                msg = {'namespace': sts.metadata.namespace, 'name': sts.metadata.name, 'kind': 'statefulset', 'replicas': sts.spec.replicas, 'labels': sts.spec.template.metadata.labels}
                 if args.enable_output:
                     print(json.dumps(msg))
                 
