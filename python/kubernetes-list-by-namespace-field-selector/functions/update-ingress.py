@@ -56,7 +56,6 @@ loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
 
 def patch(event, context):
-
     # Client to list Services
     CoreV1Api = client.CoreV1Api()
     
@@ -68,7 +67,7 @@ def patch(event, context):
 
     # Service patches
     serviceName = '[{"op": "replace", "path": "/spec/rules/0/http/paths/0/backend/serviceName", "value": "web-activate"}]'
-    servicePort = '[{"op": "replace", "path": "/spec/rules/0/http/paths/0/backend/servicePort", "value": 3000}]'
+    servicePort = '[{"op": "replace", "path": "/spec/rules/0/http/paths/0/backend/servicePort", "value": 80}]'
 
     # Convert labels to key=value array of string (e.g. key1=value1,key2=value2) 
     list=[]
