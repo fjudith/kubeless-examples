@@ -229,7 +229,7 @@ def configmap(event, context):
         logger.info("Created Configmap name: %s Namespace: %s" % (api_response.metadata.name, api_response.metadata.namespace))     
 
 
-def run(event, context):
+def create(event, context):
     configmap(event, context)
     service(event, context)
     deployment(event, context)
