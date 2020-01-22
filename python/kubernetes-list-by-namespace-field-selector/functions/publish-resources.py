@@ -86,7 +86,7 @@ async def publish(loop):
                 if args.enable_output:
                     print(json.dumps(msg))
                 
-                if deploy.spec.replicas > 1:
+                if deploy.spec.replicas > 0 and not deploy.metadata.name == "web-rescaler":
                     try:
                         await nc.publish("k8s_replicas", json.dumps(msg).encode('utf-8'))
                         await nc.flush(0.500)
@@ -105,7 +105,7 @@ async def publish(loop):
                 if args.enable_output:
                     print(json.dumps(msg))
                 
-                if sts.spec.replicas > 0:
+                if sts.spec.replicas > 1:
                     try:
                         await nc.publish("k8s_replicas", json.dumps(msg).encode('utf-8'))
                         await nc.flush(0.500)
